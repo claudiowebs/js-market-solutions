@@ -1,0 +1,16 @@
+{
+  "name": "JS Market | Muestreo PDV",
+  "short_name": "Muestreo PDV",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f5f9",
+  "theme_color": "#0f1e40",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

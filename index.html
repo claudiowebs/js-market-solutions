@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <title>JS Market | Muestreo PDV</title>
+    <meta name="theme-color" content="#0f1e40" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+  :root {
+    --navy: #0f1e40;
+    --navy-2: #1a2b55;
+    --blue: #0066a2;
+    --cyan: #00a3e0;
+    --bg: #f3f5f9;
+    --card: #ffffff;
+    --text: #0f172a;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --danger: #dc2626;
+    --ok: #16a34a;
+    --warn: #d97706;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input { font: inherit; color: inherit; }
+  .hidden { display: none !important; }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--navy);
+    color: #fff;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-icon { width: 38px; height: 38px; border-radius: 10px; background: #fff; padding: 4px; display: grid; place-items: center; }
+  .brand-icon svg { width: 100%; height: 100%; }
+  .brand-name { font-weight: 700; letter-spacing: -0.01em; }
+  .brand-sub { font-size: 12px; color: #a8b3cf; }
+
+  .tabs { display: flex; background: var(--navy-2); border-radius: 10px; padding: 3px; }
+  .tab {
+    border: 0;
+    background: transparent;
+    color: #c7d0e6;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .tab.active { background: #fff; color: var(--navy); }
+  .count { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 10px; background: var(--cyan); color: #fff; font-size: 12px; }
+
+  .shell { max-width: 720px; margin: 0 auto; padding: 16px 16px 110px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 2px rgba(15, 30, 64, 0.04);
+  }
+  .card-head { display: flex; align-items: center; gap: 10px; font-weight: 600; margin-bottom: 12px; }
+  .step { width: 24px; height: 24px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 13px; display: grid; place-items: center; }
+
+  .input, .search input {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #fff;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input:focus, .search input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0, 102, 162, 0.15); }
+
+  .search { position: relative; flex: 1; }
+  .search input { padding-left: 40px; }
+  .search-icon { position: absolute; left: 13px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); fill: var(--muted); }
+
+  .picker { position: relative; }
+  .results {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15, 30, 64, 0.08);
+  }
+  .result { padding: 10px 12px; border-radius: 8px; cursor: pointer; }
+  .result:hover, .result.active { background: #eef6fb; }
+  .result-name { font-weight: 600; }
+  .result-meta { font-size: 13px; color: var(--muted); }
+  .result mark { background: #cdeefa; color: inherit; border-radius: 3px; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+  .client { border: 1px solid #cfe7f3; background: linear-gradient(180deg, #f2f9fd, #fff); border-radius: 12px; padding: 14px; }
+  .client-top { display: flex; justify-content: space-between; gap: 12px; }
+  .client-name { font-size: 17px; font-weight: 700; color: var(--navy); }
+  .client-address { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .chip { font-size: 12px; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+  .chip b { color: var(--muted); font-weight: 500; margin-right: 2px; }
+
+  .link { border: 0; background: none; color: var(--blue); font-weight: 600; font-size: 14px; cursor: pointer; padding: 0; }
+  .link.danger { color: var(--danger); }
+
+  .recorder { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 8px 0; }
+  .mic {
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    border: 0;
+    background: linear-gradient(135deg, var(--blue), var(--cyan));
+    box-shadow: 0 8px 20px rgba(0, 102, 162, 0.35);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .mic:active { transform: scale(0.96); }
+  .mic:disabled { opacity: 0.4; cursor: not-allowed; }
+  .mic-icon { width: 36px; height: 36px; fill: #fff; }
+  .stop-icon { display: none; width: 26px; height: 26px; border-radius: 6px; background: #fff; }
+  .recording .mic { background: var(--danger); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); animation: ring 1.4s infinite; }
+  .recording .mic-icon { display: none; }
+  .recording .stop-icon { display: block; }
+  .timer { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--navy); }
+  .recording .timer { color: var(--danger); }
+  .rec-status { font-size: 13px; color: var(--muted); }
+  .recorder audio { width: 100%; margin-top: 6px; }
+  .rec-actions { display: flex; gap: 18px; justify-content: center; margin-top: 4px; }
+  .error { color: var(--danger); font-size: 13px; }
+  @keyframes ring { 70% { box-shadow: 0 0 0 16px rgba(220, 38, 38, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); } }
+
+  .actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(243, 245, 249, 0.92);
+    backdrop-filter: blur(6px);
+    border-top: 1px solid var(--line);
+  }
+  .btn-primary {
+    display: block;
+    width: 100%;
+    max-width: 688px;
+    margin: 0 auto;
+    border: 0;
+    border-radius: 12px;
+    padding: 15px;
+    background: var(--navy);
+    color: #fff;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+  .btn-ghost { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 11px 14px; font-weight: 500; cursor: pointer; }
+
+  .list-tools { display: flex; gap: 8px; margin-bottom: 10px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .filter { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
+  .filter.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+
+  .records { display: grid; gap: 10px; }
+  .record { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .record-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .record-name { font-weight: 600; color: var(--navy); }
+  .record-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .record-text { margin-top: 10px; font-size: 14px; background: var(--bg); border-radius: 8px; padding: 10px; white-space: pre-wrap; }
+  .record-actions { display: flex; gap: 16px; margin-top: 10px; }
+  .badge { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+  .st-PENDIENTE { background: #fef3c7; color: #92400e; }
+  .st-EN_PROCESO { background: #dbeafe; color: #1e40af; }
+  .st-TRANSCRITO { background: #dcfce7; color: #166534; }
+  .st-ERROR { background: #fee2e2; color: #991b1b; }
+  .st-SIN_AUDIO { background: #e2e8f0; color: #334155; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 96px;
+    transform: translateX(-50%);
+    background: var(--navy);
+    color: #fff;
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 14px;
+    z-index: 50;
+    max-width: calc(100% - 32px);
+    box-shadow: 0 8px 24px rgba(15, 30, 64, 0.25);
+  }
+  .toast.err { background: var(--danger); }
+  .overlay { position: fixed; inset: 0; background: rgba(15, 30, 64, 0.35); display: grid; place-items: center; z-index: 60; }
+  .spinner { width: 42px; height: 42px; border: 4px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .logout { border: 1px solid rgba(255, 255, 255, 0.25); background: transparent; color: #fff; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; margin-left: auto; }
+  .login { max-width: 420px; margin: 32px auto 0; text-align: center; display: grid; gap: 14px; padding: 28px 22px; }
+  .login-icon { width: 56px; height: 56px; margin: 0 auto; border-radius: 16px; background: linear-gradient(135deg, var(--blue), var(--cyan)); display: grid; place-items: center; }
+  .login-icon svg { width: 28px; height: 28px; fill: #fff; }
+  .login-title { font-size: 20px; margin: 0; color: var(--navy); }
+  .login-text { margin: 0; color: var(--muted); font-size: 14px; }
+  .input-lg { text-align: center; font-size: 20px; letter-spacing: 0.2em; padding: 14px; }
+  .input-lg::placeholder { letter-spacing: normal; font-size: 16px; }
+  .login .btn-primary { max-width: none; }
+
+  .notice { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; font-size: 14px; }
+  .notice-warn { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; }
+  .notice-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; }
+  .notice-link { flex-shrink: 0; background: var(--navy); color: #fff; text-decoration: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; }
+  .mic-help { text-align: left; font-size: 13px; background: #fef2f2; border: 1px solid #fecaca; color: #7f1d1d; border-radius: 10px; padding: 12px 14px; width: 100%; }
+  .mic-help ol { margin: 6px 0 0; padding-left: 18px; }
+
+  @media (max-width: 520px) {
+    .topbar { padding: 10px 12px; }
+    .tabs { width: 100%; }
+    .tab { flex: 1; }
+    .shell { padding: 12px 12px 110px; }
+  }
+</style>
+    <script>window.APP_CONFIG = {"apiUrl":"https://script.google.com/macros/s/AKfycbxEihS_RmiFGykzX4rxFWQWQ6ETjAWYOum_OuKGv94wgiPcOZa-YpvU7wtDJBAnQ1QQ/exec"};</script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 400 360" aria-label="JS Market">
+            <path fill="#0066A2" d="M 60 165 C 60 215, 80 260, 150 260 C 205 260, 205 215, 205 165 L 205 30 L 150 30 L 150 165 C 150 190, 145 205, 125 205 C 105 205, 100 190, 100 165 Z" />
+            <path fill="#00A3E0" opacity="0.85" style="mix-blend-mode: multiply" d="M 140 245 C 140 295, 185 320, 245 320 C 315 320, 330 270, 330 230 C 330 155, 200 175, 200 130 C 200 105, 225 95, 250 95 C 285 95, 305 115, 305 140 L 350 140 C 350 90, 310 55, 250 55 C 180 55, 155 100, 155 135 C 155 210, 285 190, 285 235 C 285 265, 260 275, 235 275 C 195 275, 185 245, 185 245 Z" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">JS Market</div>
+          <div id="brandSub" class="brand-sub">Muestreo de clientes PDV</div>
+        </div>
+      </div>
+      <button id="btnLogout" type="button" class="logout hidden">Salir</button>
+      <nav id="appTabs" class="tabs hidden" role="tablist">
+        <button class="tab active" data-view="viewNew" type="button">Nueva visita</button>
+        <button class="tab" data-view="viewList" type="button">Registros <span id="pendingBadge" class="count hidden"></span></button>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div id="notice" class="notice hidden"></div>
+      <section id="viewLogin" class="view">
+        <form id="loginForm" class="card login" novalidate>
+          <div class="login-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 1a5 5 0 0 1 5 5v3h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h1V6a5 5 0 0 1 5-5zm0 2a3 3 0 0 0-3 3v3h6V6a3 3 0 0 0-3-3z" /></svg>
+          </div>
+          <h1 class="login-title">Acceso de zonal</h1>
+          <p class="login-text">Ingresa el DNI del jefe zonal para ver tus puntos de venta.</p>
+          <input id="dniJefe" class="input input-lg" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="DNI del jefe zonal" required />
+          <div id="loginError" class="error hidden"></div>
+          <button id="btnLogin" type="submit" class="btn-primary">Ingresar</button>
+        </form>
+      </section>
+
+      <section id="viewNew" class="view hidden">
+        <form id="visitForm" novalidate>
+          <div class="card">
+            <div class="card-head"><span class="step">1</span> Cliente</div>
+
+            <div id="clientPicker" class="picker">
+              <div class="search">
+                <svg viewBox="0 0 24 24" class="search-icon"><path d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.42 1.4-5.39-5.38A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z" /></svg>
+                <input id="clientSearch" type="search" autocomplete="off" placeholder="Busca por DNI, código o nombre del punto" />
+              </div>
+              <ul id="clientResults" class="results hidden" role="listbox"></ul>
+              <div id="clientHint" class="hint">Cargando clientes...</div>
+            </div>
+
+            <div id="clientCard" class="client hidden">
+              <div class="client-top">
+                <div>
+                  <div id="cNombre" class="client-name"></div>
+                  <div id="cDireccion" class="client-address"></div>
+                </div>
+                <button id="btnChangeClient" class="link" type="button">Cambiar</button>
+              </div>
+              <div class="chips">
+                <span class="chip"><b>DNI</b> <span id="cDni"></span></span>
+                <span class="chip"><b>Cód.</b> <span id="cCod"></span></span>
+                <span class="chip"><b>Zonal</b> <span id="cZonal"></span></span>
+                <span class="chip"><b>Ruta</b> <span id="cRuta"></span></span>
+                <span class="chip"><b>Módulo</b> <span id="cModulo"></span></span>
+                <span class="chip"><b>Distrito</b> <span id="cDistrito"></span></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><span class="step">2</span> Fecha de visita</div>
+            <input id="fecha" type="date" class="input" required />
+          </div>
+
+          <div class="card">
+            <div class="card-head"><span class="step">3</span> Nota de voz</div>
+            <div id="recorder" class="recorder">
+              <button id="btnRecord" type="button" class="mic" aria-label="Grabar">
+                <svg viewBox="0 0 24 24" class="mic-icon"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" /></svg>
+                <span class="stop-icon"></span>
+              </button>
+              <div id="recTimer" class="timer">00:00</div>
+              <div id="recStatus" class="rec-status">Toca para grabar (máx. 5 min)</div>
+              <audio id="audioPreview" class="hidden" controls></audio>
+              <div class="rec-actions">
+                <button id="btnDiscard" type="button" class="link danger hidden">Descartar audio</button>
+                <label for="audioFile" class="link">o subir un audio</label>
+                <input id="audioFile" type="file" accept="audio/*" class="hidden" />
+              </div>
+              <div id="recError" class="error hidden"></div>
+              <div id="micHelp" class="mic-help hidden">
+                <strong>El micrófono está bloqueado para esta página.</strong>
+                <ol>
+                  <li>Toca el candado o el ícono junto a la dirección web.</li>
+                  <li>Entra a <b>Permisos</b> &gt; <b>Micrófono</b> y elige <b>Permitir</b>.</li>
+                  <li>Recarga la página y vuelve a tocar el micrófono.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="btnSave" type="submit" class="btn-primary" disabled>Guardar visita</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="viewList" class="view hidden">
+        <div class="list-tools">
+          <div class="search">
+            <svg viewBox="0 0 24 24" class="search-icon"><path d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.42 1.4-5.39-5.38A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z" /></svg>
+            <input id="recordSearch" type="search" placeholder="Buscar por nombre, DNI o transcripción" />
+          </div>
+          <button id="btnRefresh" type="button" class="btn-ghost">Actualizar</button>
+        </div>
+        <div id="statusFilters" class="filters"></div>
+        <div id="recordsList" class="records"></div>
+        <div id="emptyState" class="empty hidden">No hay registros.</div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+    <div id="loading" class="overlay hidden"><div class="spinner"></div></div>
+
+    <script>
+  const MAX_RECORD_SECONDS = 300;
+  const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+  const AUTO_REFRESH_MS = 60000;
+  const MAX_RESULTS = 8;
+  const CLIENT_KEYS = ['dni', 'codCliente', 'codigoCum', 'nombrePunto', 'zonal', 'ruta', 'modulo', 'distrito', 'direccion'];
+  const STATUSES = ['PENDIENTE', 'EN_PROCESO', 'TRANSCRITO', 'ERROR', 'SIN_AUDIO'];
+
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  };
+  const normalize = (value) =>
+    String(value || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase();
+
+  const APP_CONFIG = window.APP_CONFIG || {};
+  const IN_APPS_SCRIPT = Boolean(window.google && google.script && google.script.run);
+
+  const Transport = {
+    appsScript(fn, args) {
+      return new Promise((resolve, reject) =>
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](...args)
+      );
+    },
+    async http(fn, args) {
+      const response = await fetch(APP_CONFIG.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: fn, args }),
+      });
+      if (!response.ok) throw new Error(`Servidor no disponible (${response.status}).`);
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.error);
+      return result.data;
+    },
+  };
+
+  const api = (fn, ...args) => (IN_APPS_SCRIPT ? Transport.appsScript(fn, args) : Transport.http(fn, args));
+
+  const Environment = {
+    isInAppBrowser() {
+      return /FBAN|FBAV|Instagram|Line\/|WhatsApp|TikTok|; wv\)/i.test(navigator.userAgent);
+    },
+    init() {
+      if (this.isInAppBrowser()) {
+        Notice.show('Estás dentro de otra app. Para grabar audio toca ⋮ y elige "Abrir en Chrome".', 'warn');
+      } else if (IN_APPS_SCRIPT && APP_CONFIG.publicUrl) {
+        Notice.show('Esta versión no permite usar el micrófono. Abre la app oficial para grabar.', 'warn', APP_CONFIG.publicUrl);
+      }
+    },
+  };
+
+  const Notice = {
+    show(message, type = 'info', link = null) {
+      const box = $('notice');
+      box.className = `notice notice-${type}`;
+      box.replaceChildren(el('span', null, message));
+      if (link) {
+        const a = el('a', 'notice-link', 'Abrir app');
+        a.href = link;
+        a.target = '_top';
+        box.appendChild(a);
+      }
+    },
+    hide() {
+      $('notice').classList.add('hidden');
+    },
+  };
+
+  const MicPermission = {
+    async state() {
+      try {
+        const status = await navigator.permissions.query({ name: 'microphone' });
+        return status.state;
+      } catch (err) {
+        return 'prompt';
+      }
+    },
+    async explain() {
+      const state = await this.state();
+      if (state === 'denied') {
+        $('micHelp').classList.remove('hidden');
+        return false;
+      }
+      $('micHelp').classList.add('hidden');
+      return true;
+    },
+  };
+
+  const State = {
+    clients: [],
+    selected: null,
+    audio: null,
+    records: [],
+    statusFilter: '',
+    refreshTimer: null,
+  };
+
+  const Ui = {
+    loading(show) {
+      $('loading').classList.toggle('hidden', !show);
+    },
+    notify(message, ok = true) {
+      const toast = $('toast');
+      toast.textContent = message;
+      toast.className = ok ? 'toast' : 'toast err';
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => toast.classList.add('hidden'), 3500);
+    },
+    time(seconds) {
+      return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    },
+    today() {
+      return new Date().toLocaleDateString('en-CA');
+    },
+    showView(id) {
+      document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== id));
+      document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === id));
+      if (id === 'viewList') Records.load();
+    },
+    refreshSaveButton() {
+      $('btnSave').disabled = !State.selected || Recorder.isRecording();
+    },
+  };
+
+  const ClientPicker = {
+    activeIndex: -1,
+    matches: [],
+
+    init() {
+      $('clientSearch').addEventListener('input', () => this.search());
+      $('clientSearch').addEventListener('keydown', (e) => this.onKey(e));
+      $('clientSearch').addEventListener('focus', () => this.search());
+      $('btnChangeClient').addEventListener('click', () => this.clear(true));
+      document.addEventListener('click', (e) => {
+        if (!$('clientPicker').contains(e.target)) $('clientResults').classList.add('hidden');
+      });
+    },
+
+    async load() {
+      const rows = await api('apiGetClientes', Session.dni);
+      State.clients = rows.map((row) => {
+        const client = CLIENT_KEYS.reduce((acc, key, i) => ((acc[key] = row[i]), acc), {});
+        client.haystack = normalize(`${client.dni} ${client.codCliente} ${client.codigoCum} ${client.nombrePunto} ${client.distrito}`);
+        return client;
+      });
+      $('clientHint').textContent = `${State.clients.length.toLocaleString('es-PE')} clientes disponibles`;
+    },
+
+    search() {
+      const term = normalize($('clientSearch').value.trim());
+      const list = $('clientResults');
+      if (term.length < 2) {
+        list.classList.add('hidden');
+        return;
+      }
+
+      const words = term.split(/\s+/);
+      this.matches = State.clients
+        .filter((c) => words.every((w) => c.haystack.includes(w)))
+        .sort((a, b) => this.rank(b, term) - this.rank(a, term))
+        .slice(0, MAX_RESULTS);
+      this.activeIndex = this.matches.length ? 0 : -1;
+      this.render(words);
+    },
+
+    rank(client, term) {
+      if (client.dni === term || client.codCliente === term) return 3;
+      if (client.dni.startsWith(term) || client.codCliente.startsWith(term)) return 2;
+      return normalize(client.nombrePunto).startsWith(term) ? 1 : 0;
+    },
+
+    render(words) {
+      const list = $('clientResults');
+      list.replaceChildren();
+      if (!this.matches.length) {
+        list.appendChild(el('li', 'result result-meta', 'Sin coincidencias'));
+      }
+      this.matches.forEach((client, i) => {
+        const item = el('li', `result${i === this.activeIndex ? ' active' : ''}`);
+        item.setAttribute('role', 'option');
+        const name = el('div', 'result-name');
+        this.highlight(name, client.nombrePunto, words);
+        const meta = el('div', 'result-meta');
+        this.highlight(meta, `DNI ${client.dni} · Cód. ${client.codCliente} · ${client.distrito}`, words);
+        item.append(name, meta);
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          this.select(client);
+        });
+        list.appendChild(item);
+      });
+      list.classList.remove('hidden');
+    },
+
+    highlight(node, text, words) {
+      const plain = normalize(text);
+      const ranges = [];
+      words.forEach((w) => {
+        const i = plain.indexOf(w);
+        if (i >= 0) ranges.push([i, i + w.length]);
+      });
+      ranges.sort((a, b) => a[0] - b[0]);
+      let cursor = 0;
+      ranges.forEach(([start, end]) => {
+        if (start < cursor) return;
+        node.append(text.slice(cursor, start), el('mark', null, text.slice(start, end)));
+        cursor = end;
+      });
+      node.append(text.slice(cursor));
+    },
+
+    onKey(event) {
+      const list = $('clientResults');
+      if (list.classList.contains('hidden') || !this.matches.length) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        this.activeIndex = (this.activeIndex + step + this.matches.length) % this.matches.length;
+        [...list.children].forEach((li, i) => li.classList.toggle('active', i === this.activeIndex));
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        this.select(this.matches[Math.max(this.activeIndex, 0)]);
+      } else if (event.key === 'Escape') {
+        list.classList.add('hidden');
+      }
+    },
+
+    select(client) {
+      State.selected = client;
+      $('cNombre').textContent = client.nombrePunto;
+      $('cDireccion').textContent = client.direccion;
+      $('cDni').textContent = client.dni;
+      $('cCod').textContent = client.codCliente;
+      $('cZonal').textContent = client.zonal;
+      $('cRuta').textContent = client.ruta;
+      $('cModulo').textContent = client.modulo;
+      $('cDistrito').textContent = client.distrito;
+      $('clientPicker').classList.add('hidden');
+      $('clientCard').classList.remove('hidden');
+      $('clientResults').classList.add('hidden');
+      Ui.refreshSaveButton();
+    },
+
+    clear(focus = false) {
+      State.selected = null;
+      $('clientSearch').value = '';
+      $('clientCard').classList.add('hidden');
+      $('clientPicker').classList.remove('hidden');
+      $('clientResults').classList.add('hidden');
+      Ui.refreshSaveButton();
+      if (focus) $('clientSearch').focus();
+    },
+  };
+
+  const Recorder = {
+    recorder: null,
+    stream: null,
+    chunks: [],
+    interval: null,
+
+    init() {
+      $('btnRecord').addEventListener('click', () => this.toggle());
+      $('btnDiscard').addEventListener('click', () => this.reset());
+      $('audioFile').addEventListener('change', (e) => this.fromFile(e.target.files[0]));
+      if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) {
+        $('btnRecord').disabled = true;
+        this.status('Este navegador no permite grabar aquí. Usa "subir un audio".');
+      }
+    },
+
+    isRecording() {
+      return Boolean(this.recorder && this.recorder.state === 'recording');
+    },
+
+    mimeType() {
+      return ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+    },
+
+    async toggle() {
+      if (this.isRecording()) {
+        this.recorder.stop();
+        return;
+      }
+      this.reset();
+      if (!(await MicPermission.explain())) return;
+      this.status('Si el navegador lo pide, toca "Permitir" para usar el micrófono.');
+      try {
+        this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        const mimeType = this.mimeType();
+        this.recorder = new MediaRecorder(this.stream, mimeType ? { mimeType, audioBitsPerSecond: 32000 } : undefined);
+        this.chunks = [];
+        this.recorder.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
+        this.recorder.onstop = () => {
+          this.release();
+          this.setAudio(new Blob(this.chunks, { type: this.recorder.mimeType || 'audio/webm' }));
+        };
+        this.recorder.start(1000);
+        const startedAt = Date.now();
+        this.interval = setInterval(() => {
+          const seconds = Math.floor((Date.now() - startedAt) / 1000);
+          $('recTimer').textContent = Ui.time(seconds);
+          if (seconds >= MAX_RECORD_SECONDS) this.recorder.stop();
+        }, 250);
+        this.setRecording(true);
+        this.status('Grabando... toca para detener');
+      } catch (err) {
+        this.release();
+        this.status('Toca para grabar (máx. 5 min)');
+        if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+          $('micHelp').classList.remove('hidden');
+        } else {
+          this.error(`No se pudo acceder al micrófono (${err.name}). Usa "subir un audio".`);
+        }
+      }
+    },
+
+    fromFile(file) {
+      if (!file) return;
+      if (!file.type.startsWith('audio/')) return this.error('El archivo no es audio.');
+      this.reset();
+      this.setAudio(file);
+    },
+
+    setAudio(blob) {
+      this.setRecording(false);
+      if (blob.size > MAX_AUDIO_BYTES) return this.error('El audio supera 25 MB.');
+      State.audio = blob;
+      const preview = $('audioPreview');
+      preview.src = URL.createObjectURL(blob);
+      preview.classList.remove('hidden');
+      $('btnDiscard').classList.remove('hidden');
+      this.status('Audio listo. Escúchalo o vuelve a grabar.');
+    },
+
+    reset() {
+      if (this.isRecording()) {
+        this.recorder.onstop = null;
+        this.recorder.stop();
+      }
+      this.release();
+      State.audio = null;
+      const preview = $('audioPreview');
+      if (preview.src) URL.revokeObjectURL(preview.src);
+      preview.removeAttribute('src');
+      preview.classList.add('hidden');
+      $('btnDiscard').classList.add('hidden');
+      $('audioFile').value = '';
+      $('recError').classList.add('hidden');
+      $('micHelp').classList.add('hidden');
+      $('recTimer').textContent = '00:00';
+      this.setRecording(false);
+      this.status('Toca para grabar (máx. 5 min)');
+    },
+
+    release() {
+      clearInterval(this.interval);
+      if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
+    },
+
+    setRecording(recording) {
+      $('recorder').classList.toggle('recording', recording);
+      Ui.refreshSaveButton();
+    },
+
+    status(message) {
+      $('recStatus').textContent = message;
+    },
+
+    error(message) {
+      $('recError').textContent = message;
+      $('recError').classList.remove('hidden');
+    },
+
+    async payload() {
+      if (!State.audio) return null;
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(State.audio);
+      });
+      return { mimeType: State.audio.type, base64: String(dataUrl).split(',')[1] };
+    },
+  };
+
+  const VisitForm = {
+    init() {
+      $('fecha').value = Ui.today();
+      $('visitForm').addEventListener('submit', (e) => this.submit(e));
+    },
+
+    async submit(event) {
+      event.preventDefault();
+      if (!State.selected) return Ui.notify('Selecciona un cliente.', false);
+      if (!$('fecha').value) return Ui.notify('Indica la fecha.', false);
+      if (!State.audio && !confirm('No grabaste audio. ¿Guardar la visita sin nota de voz?')) return;
+
+      Ui.loading(true);
+      try {
+        const payload = {
+          form: { dni: State.selected.dni, codCliente: State.selected.codCliente, fecha: $('fecha').value },
+          audio: await Recorder.payload(),
+        };
+        Records.render(await api('apiCreateRecord', Session.dni, payload));
+        ClientPicker.clear();
+        Recorder.reset();
+        $('fecha').value = Ui.today();
+        Ui.notify(payload.audio ? 'Visita guardada. El audio se transcribirá en unos minutos.' : 'Visita guardada.');
+      } catch (err) {
+        Ui.notify(err.message || String(err), false);
+      } finally {
+        Ui.loading(false);
+      }
+    },
+  };
+
+  const Records = {
+    init() {
+      $('btnRefresh').addEventListener('click', () => this.load());
+      $('recordSearch').addEventListener('input', () => this.draw());
+      const filters = $('statusFilters');
+      ['', ...STATUSES].forEach((status) => {
+        const btn = el('button', `filter${status === '' ? ' active' : ''}`, status ? status.replace('_', ' ') : 'Todos');
+        btn.type = 'button';
+        btn.addEventListener('click', () => {
+          State.statusFilter = status;
+          [...filters.children].forEach((b) => b.classList.toggle('active', b === btn));
+          this.draw();
+        });
+        filters.appendChild(btn);
+      });
+    },
+
+    async load(silent = false) {
+      if (!silent) Ui.loading(true);
+      try {
+        this.render(await api('apiListRecords', Session.dni));
+      } catch (err) {
+        if (!silent) Ui.notify(err.message || String(err), false);
+      } finally {
+        if (!silent) Ui.loading(false);
+      }
+    },
+
+    render(records) {
+      State.records = records || [];
+      const waiting = State.records.filter((r) => r.estado === 'PENDIENTE' || r.estado === 'EN_PROCESO').length;
+      $('pendingBadge').textContent = waiting;
+      $('pendingBadge').classList.toggle('hidden', !waiting);
+      clearTimeout(State.refreshTimer);
+      if (waiting) State.refreshTimer = setTimeout(() => this.load(true), AUTO_REFRESH_MS);
+      this.draw();
+    },
+
+    draw() {
+      const term = normalize($('recordSearch').value.trim());
+      const rows = State.records.filter(
+        (r) =>
+          (!State.statusFilter || r.estado === State.statusFilter) &&
+          (!term || normalize(`${r.nombrePunto} ${r.dni} ${r.codCliente} ${r.transcripcion}`).includes(term))
+      );
+      $('emptyState').classList.toggle('hidden', rows.length > 0);
+      $('recordsList').replaceChildren(...rows.map((r) => this.card(r)));
+    },
+
+    card(record) {
+      const card = el('article', 'record');
+      const top = el('div', 'record-top');
+      const info = el('div');
+      info.append(
+        el('div', 'record-name', record.nombrePunto),
+        el('div', 'record-meta', `DNI ${record.dni} · Cód. ${record.codCliente} · ${record.fecha}`),
+        el('div', 'record-meta', [record.zonal, record.ruta, record.modulo, record.distrito].filter(Boolean).join(' · '))
+      );
+      const badge = el('span', `badge st-${record.estado}`, record.estado.replace('_', ' '));
+      if (record.error) badge.title = record.error;
+      top.append(info, badge);
+      card.appendChild(top);
+
+      if (record.transcripcion) card.appendChild(el('div', 'record-text', record.transcripcion));
+
+      const actions = el('div', 'record-actions');
+      if (record.audioUrl) {
+        const link = el('a', 'link', 'Escuchar audio');
+        link.href = record.audioUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        actions.appendChild(link);
+      }
+      const del = el('button', 'link danger', 'Eliminar');
+      del.type = 'button';
+      del.addEventListener('click', () => this.remove(record));
+      actions.appendChild(del);
+      card.appendChild(actions);
+      return card;
+    },
+
+    async remove(record) {
+      if (!confirm(`¿Eliminar la visita de ${record.nombrePunto}?`)) return;
+      Ui.loading(true);
+      try {
+        this.render(await api('apiDeleteRecord', Session.dni, record.id));
+      } catch (err) {
+        Ui.notify(err.message || String(err), false);
+      } finally {
+        Ui.loading(false);
+      }
+    },
+  };
+
+  const Session = {
+    STORAGE_KEY: 'jsm_dni_jefe',
+    dni: '',
+
+    init() {
+      $('loginForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.login($('dniJefe').value);
+      });
+      $('btnLogout').addEventListener('click', () => this.logout());
+      const saved = this.read();
+      if (saved) this.login(saved, true);
+    },
+
+    async login(rawDni, silent = false) {
+      const dni = String(rawDni || '').replace(/\D/g, '');
+      if (!dni) return this.fail('Ingresa el DNI del jefe zonal.');
+
+      Ui.loading(true);
+      try {
+        const profile = await api('apiLogin', dni);
+        this.dni = profile.dniJefe;
+        this.write(this.dni);
+        $('brandSub').textContent = `Jefe: ${profile.nombreJefe}`;
+        $('btnLogout').classList.remove('hidden');
+        $('appTabs').classList.remove('hidden');
+        $('loginError').classList.add('hidden');
+        Ui.showView('viewNew');
+        const [, records] = await Promise.all([ClientPicker.load(), api('apiListRecords', this.dni)]);
+        Records.render(records);
+      } catch (err) {
+        this.write('');
+        if (!silent) this.fail(err.message || String(err));
+      } finally {
+        Ui.loading(false);
+      }
+    },
+
+    logout() {
+      this.write('');
+      window.location.reload();
+    },
+
+    fail(message) {
+      $('loginError').textContent = message;
+      $('loginError').classList.remove('hidden');
+    },
+
+    read() {
+      try {
+        return localStorage.getItem(this.STORAGE_KEY) || '';
+      } catch (err) {
+        return '';
+      }
+    },
+
+    write(value) {
+      try {
+        if (value) localStorage.setItem(this.STORAGE_KEY, value);
+        else localStorage.removeItem(this.STORAGE_KEY);
+      } catch (err) {
+        return;
+      }
+    },
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    Environment.init();
+    document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => Ui.showView(tab.dataset.view)));
+    ClientPicker.init();
+    Recorder.init();
+    VisitForm.init();
+    Records.init();
+    Session.init();
+  });
+</script>
+  </body>
+</html>
