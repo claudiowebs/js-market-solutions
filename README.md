@@ -5,7 +5,7 @@ Aplicación web para registrar visitas a puntos de venta (PDV) con nota de voz. 
 **App:** https://claudiowebs.github.io/js-market-solutions/
 
 ## Cómo se usa
-
+<!-- redeploy -->
 ### 1. Ingresar
 1. Abre el enlace de la app en **Chrome** (celular o PC).
 2. Escribe el **DNI del jefe zonal** y toca **Ingresar**.
