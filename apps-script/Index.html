@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <?!= include('Css'); ?>
+    <script>window.APP_CONFIG = <?!= config ?>;</script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 400 360" aria-label="JS Market">
+            <path fill="#0066A2" d="M 60 165 C 60 215, 80 260, 150 260 C 205 260, 205 215, 205 165 L 205 30 L 150 30 L 150 165 C 150 190, 145 205, 125 205 C 105 205, 100 190, 100 165 Z" />
+            <path fill="#00A3E0" opacity="0.85" style="mix-blend-mode: multiply" d="M 140 245 C 140 295, 185 320, 245 320 C 315 320, 330 270, 330 230 C 330 155, 200 175, 200 130 C 200 105, 225 95, 250 95 C 285 95, 305 115, 305 140 L 350 140 C 350 90, 310 55, 250 55 C 180 55, 155 100, 155 135 C 155 210, 285 190, 285 235 C 285 265, 260 275, 235 275 C 195 275, 185 245, 185 245 Z" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">JS Market</div>
+          <div id="brandSub" class="brand-sub">Muestreo de clientes PDV</div>
+        </div>
+      </div>
+      <button id="btnLogout" type="button" class="logout hidden">Salir</button>
+      <nav id="appTabs" class="tabs hidden" role="tablist">
+        <button class="tab active" data-view="viewNew" type="button">Nueva visita</button>
+        <button class="tab" data-view="viewList" type="button">Registros <span id="pendingBadge" class="count hidden"></span></button>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div id="notice" class="notice hidden"></div>
+      <section id="viewLogin" class="view">
+        <form id="loginForm" class="card login" novalidate>
+          <div class="login-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 1a5 5 0 0 1 5 5v3h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h1V6a5 5 0 0 1 5-5zm0 2a3 3 0 0 0-3 3v3h6V6a3 3 0 0 0-3-3z" /></svg>
+          </div>
+          <h1 class="login-title">Acceso de zonal</h1>
+          <p class="login-text">Ingresa el DNI del jefe zonal para ver tus puntos de venta.</p>
+          <input id="dniJefe" class="input input-lg" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="DNI del jefe zonal" required />
+          <div id="loginError" class="error hidden"></div>
+          <button id="btnLogin" type="submit" class="btn-primary">Ingresar</button>
+        </form>
+      </section>
+
+      <section id="viewNew" class="view hidden">
+        <form id="visitForm" novalidate>
+          <div class="card">
+            <div class="card-head"><span class="step">1</span> Cliente</div>
+
+            <div id="clientPicker" class="picker">
+              <div class="search">
+                <svg viewBox="0 0 24 24" class="search-icon"><path d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.42 1.4-5.39-5.38A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z" /></svg>
+                <input id="clientSearch" type="search" autocomplete="off" placeholder="Busca por DNI, código o nombre del punto" />
+              </div>
+              <ul id="clientResults" class="results hidden" role="listbox"></ul>
+              <div id="clientHint" class="hint">Cargando clientes...</div>
+            </div>
+
+            <div id="clientCard" class="client hidden">
+              <div class="client-top">
+                <div>
+                  <div id="cNombre" class="client-name"></div>
+                  <div id="cDireccion" class="client-address"></div>
+                </div>
+                <button id="btnChangeClient" class="link" type="button">Cambiar</button>
+              </div>
+              <div class="chips">
+                <span class="chip"><b>DNI</b> <span id="cDni"></span></span>
+                <span class="chip"><b>Cód.</b> <span id="cCod"></span></span>
+                <span class="chip"><b>Zonal</b> <span id="cZonal"></span></span>
+                <span class="chip"><b>Ruta</b> <span id="cRuta"></span></span>
+                <span class="chip"><b>Módulo</b> <span id="cModulo"></span></span>
+                <span class="chip"><b>Distrito</b> <span id="cDistrito"></span></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><span class="step">2</span> Fecha de visita</div>
+            <input id="fecha" type="date" class="input" required />
+          </div>
+
+          <div class="card">
+            <div class="card-head"><span class="step">3</span> Nota de voz</div>
+            <div id="recorder" class="recorder">
+              <button id="btnRecord" type="button" class="mic" aria-label="Grabar">
+                <svg viewBox="0 0 24 24" class="mic-icon"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" /></svg>
+                <span class="stop-icon"></span>
+              </button>
+              <div id="recTimer" class="timer">00:00</div>
+              <div id="recStatus" class="rec-status">Toca para grabar (máx. 5 min)</div>
+              <audio id="audioPreview" class="hidden" controls></audio>
+              <div class="rec-actions">
+                <button id="btnDiscard" type="button" class="link danger hidden">Descartar audio</button>
+                <label for="audioFile" class="link">o subir un audio</label>
+                <input id="audioFile" type="file" accept="audio/*" class="hidden" />
+              </div>
+              <div id="recError" class="error hidden"></div>
+              <div id="micHelp" class="mic-help hidden">
+                <strong>El micrófono está bloqueado para esta página.</strong>
+                <ol>
+                  <li>Toca el candado o el ícono junto a la dirección web.</li>
+                  <li>Entra a <b>Permisos</b> &gt; <b>Micrófono</b> y elige <b>Permitir</b>.</li>
+                  <li>Recarga la página y vuelve a tocar el micrófono.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="btnSave" type="submit" class="btn-primary" disabled>Guardar visita</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="viewList" class="view hidden">
+        <div class="list-tools">
+          <div class="search">
+            <svg viewBox="0 0 24 24" class="search-icon"><path d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.42 1.4-5.39-5.38A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z" /></svg>
+            <input id="recordSearch" type="search" placeholder="Buscar por nombre, DNI o transcripción" />
+          </div>
+          <button id="btnRefresh" type="button" class="btn-ghost">Actualizar</button>
+        </div>
+        <div id="statusFilters" class="filters"></div>
+        <div id="recordsList" class="records"></div>
+        <div id="emptyState" class="empty hidden">No hay registros.</div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+    <div id="loading" class="overlay hidden"><div class="spinner"></div></div>
+
+    <?!= include('Javascript'); ?>
+  </body>
+</html>
