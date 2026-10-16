@@ -1,14 +1,14 @@
 const CONFIG = Object.freeze({
   APP_TITLE: 'JS Market | Muestreo PDV',
-  PUBLIC_APP_URL: 'https://claudiowebs.github.io/muestreo-pdv/',
+  PUBLIC_APP_URL: 'https://claudiowebs.github.io/js-market-solutions/',
   SPREADSHEET_NAME: 'Muestreo Clientes PDV - DB',
   AUDIO_FOLDER_NAME: 'Muestreo Clientes PDV - Audios',
   TIMEZONE: 'America/Lima',
   MAX_AUDIO_BYTES: 25 * 1024 * 1024,
   RECORDS: {
     SHEET: 'REGISTROS',
-    HEADERS: ['ID', 'FECHA_REGISTRO', 'FECHA', 'DNI', 'COD_CLIENTE', 'NOMBRE_PUNTO', 'ZONAL', 'RUTA', 'MODULO', 'DISTRITO', 'AUDIO_FILE_ID', 'AUDIO_URL', 'ESTADO', 'TRANSCRIPCION', 'FECHA_TRANSCRIPCION', 'ERROR', 'DNI_JEFE_ZONAL', 'NOMBRE_JEFE_ZONAL'],
-    KEYS: ['id', 'fechaRegistro', 'fecha', 'dni', 'codCliente', 'nombrePunto', 'zonal', 'ruta', 'modulo', 'distrito', 'audioFileId', 'audioUrl', 'estado', 'transcripcion', 'fechaTranscripcion', 'error', 'dniJefe', 'nombreJefe'],
+    HEADERS: ['ID', 'FECHA_REGISTRO', 'FECHA', 'DNI', 'COD_CLIENTE', 'NOMBRE_PUNTO', 'ZONAL', 'RUTA', 'MODULO', 'DISTRITO', 'AUDIO_FILE_ID', 'AUDIO_URL', 'ESTADO', 'TRANSCRIPCION', 'FECHA_TRANSCRIPCION', 'ERROR', 'DNI_JEFE_ZONAL', 'NOMBRE_JEFE_ZONAL', 'OBSERVACION'],
+    KEYS: ['id', 'fechaRegistro', 'fecha', 'dni', 'codCliente', 'nombrePunto', 'zonal', 'ruta', 'modulo', 'distrito', 'audioFileId', 'audioUrl', 'estado', 'transcripcion', 'fechaTranscripcion', 'error', 'dniJefe', 'nombreJefe', 'observacion'],
   },
   CLIENTS: {
     SHEET: 'CLIENTES',
@@ -163,6 +163,7 @@ function apiCreateRecord(dniJefe, payload) {
     error: '',
     dniJefe: jefe.dniJefe,
     nombreJefe: jefe.nombreJefe,
+    observacion: input.observacion,
   });
   return RecordRepository.findByJefe(jefe.dniJefe);
 }
@@ -309,10 +310,12 @@ const Validator = {
     const fecha = String(form.fecha || '').trim();
     const dni = String(form.dni || '').trim();
     const codCliente = String(form.codCliente || '').trim();
+    const observacion = String(form.observacion || '').trim();
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('Fecha inválida.');
     if (!dni) throw new Error('Selecciona un cliente.');
-    return { fecha, dni, codCliente };
+    if (observacion.length > 2000) throw new Error('La observación supera 2000 caracteres.');
+    return { fecha, dni, codCliente, observacion };
   },
 };
 
