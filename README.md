@@ -2,7 +2,7 @@
 
 Aplicación web para registrar visitas a puntos de venta (PDV) con nota de voz. El audio se guarda en Google Drive, el registro en Google Sheets y luego se transcribe automáticamente.
 
-**App:** https://claudiowebs.github.io/muestreo-pdv/
+**App:** https://claudiowebs.github.io/js-market-solutions/
 
 ## Cómo se usa
 
