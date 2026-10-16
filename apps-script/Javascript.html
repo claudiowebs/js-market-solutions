@@ -1,0 +1,594 @@
+<script>
+  const MAX_RECORD_SECONDS = 300;
+  const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+  const AUTO_REFRESH_MS = 60000;
+  const MAX_RESULTS = 8;
+  const CLIENT_KEYS = ['dni', 'codCliente', 'codigoCum', 'nombrePunto', 'zonal', 'ruta', 'modulo', 'distrito', 'direccion'];
+  const STATUSES = ['PENDIENTE', 'EN_PROCESO', 'TRANSCRITO', 'ERROR', 'SIN_AUDIO'];
+
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  };
+  const normalize = (value) =>
+    String(value || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase();
+
+  const APP_CONFIG = window.APP_CONFIG || {};
+  const IN_APPS_SCRIPT = Boolean(window.google && google.script && google.script.run);
+
+  const Transport = {
+    appsScript(fn, args) {
+      return new Promise((resolve, reject) =>
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](...args)
+      );
+    },
+    async http(fn, args) {
+      const response = await fetch(APP_CONFIG.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: fn, args }),
+      });
+      if (!response.ok) throw new Error(`Servidor no disponible (${response.status}).`);
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.error);
+      return result.data;
+    },
+  };
+
+  const api = (fn, ...args) => (IN_APPS_SCRIPT ? Transport.appsScript(fn, args) : Transport.http(fn, args));
+
+  const Environment = {
+    isInAppBrowser() {
+      return /FBAN|FBAV|Instagram|Line\/|WhatsApp|TikTok|; wv\)/i.test(navigator.userAgent);
+    },
+    init() {
+      if (this.isInAppBrowser()) {
+        Notice.show('Estás dentro de otra app. Para grabar audio toca ⋮ y elige "Abrir en Chrome".', 'warn');
+      } else if (IN_APPS_SCRIPT && APP_CONFIG.publicUrl) {
+        Notice.show('Esta versión no permite usar el micrófono. Abre la app oficial para grabar.', 'warn', APP_CONFIG.publicUrl);
+      }
+    },
+  };
+
+  const Notice = {
+    show(message, type = 'info', link = null) {
+      const box = $('notice');
+      box.className = `notice notice-${type}`;
+      box.replaceChildren(el('span', null, message));
+      if (link) {
+        const a = el('a', 'notice-link', 'Abrir app');
+        a.href = link;
+        a.target = '_top';
+        box.appendChild(a);
+      }
+    },
+    hide() {
+      $('notice').classList.add('hidden');
+    },
+  };
+
+  const MicPermission = {
+    async state() {
+      try {
+        const status = await navigator.permissions.query({ name: 'microphone' });
+        return status.state;
+      } catch (err) {
+        return 'prompt';
+      }
+    },
+    async explain() {
+      const state = await this.state();
+      if (state === 'denied') {
+        $('micHelp').classList.remove('hidden');
+        return false;
+      }
+      $('micHelp').classList.add('hidden');
+      return true;
+    },
+  };
+
+  const State = {
+    clients: [],
+    selected: null,
+    audio: null,
+    records: [],
+    statusFilter: '',
+    refreshTimer: null,
+  };
+
+  const Ui = {
+    loading(show) {
+      $('loading').classList.toggle('hidden', !show);
+    },
+    notify(message, ok = true) {
+      const toast = $('toast');
+      toast.textContent = message;
+      toast.className = ok ? 'toast' : 'toast err';
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => toast.classList.add('hidden'), 3500);
+    },
+    time(seconds) {
+      return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    },
+    today() {
+      return new Date().toLocaleDateString('en-CA');
+    },
+    showView(id) {
+      document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== id));
+      document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === id));
+      if (id === 'viewList') Records.load();
+    },
+    refreshSaveButton() {
+      $('btnSave').disabled = !State.selected || Recorder.isRecording();
+    },
+  };
+
+  const ClientPicker = {
+    activeIndex: -1,
+    matches: [],
+
+    init() {
+      $('clientSearch').addEventListener('input', () => this.search());
+      $('clientSearch').addEventListener('keydown', (e) => this.onKey(e));
+      $('clientSearch').addEventListener('focus', () => this.search());
+      $('btnChangeClient').addEventListener('click', () => this.clear(true));
+      document.addEventListener('click', (e) => {
+        if (!$('clientPicker').contains(e.target)) $('clientResults').classList.add('hidden');
+      });
+    },
+
+    async load() {
+      const rows = await api('apiGetClientes', Session.dni);
+      State.clients = rows.map((row) => {
+        const client = CLIENT_KEYS.reduce((acc, key, i) => ((acc[key] = row[i]), acc), {});
+        client.haystack = normalize(`${client.dni} ${client.codCliente} ${client.codigoCum} ${client.nombrePunto} ${client.distrito}`);
+        return client;
+      });
+      $('clientHint').textContent = `${State.clients.length.toLocaleString('es-PE')} clientes disponibles`;
+    },
+
+    search() {
+      const term = normalize($('clientSearch').value.trim());
+      const list = $('clientResults');
+      if (term.length < 2) {
+        list.classList.add('hidden');
+        return;
+      }
+
+      const words = term.split(/\s+/);
+      this.matches = State.clients
+        .filter((c) => words.every((w) => c.haystack.includes(w)))
+        .sort((a, b) => this.rank(b, term) - this.rank(a, term))
+        .slice(0, MAX_RESULTS);
+      this.activeIndex = this.matches.length ? 0 : -1;
+      this.render(words);
+    },
+
+    rank(client, term) {
+      if (client.dni === term || client.codCliente === term) return 3;
+      if (client.dni.startsWith(term) || client.codCliente.startsWith(term)) return 2;
+      return normalize(client.nombrePunto).startsWith(term) ? 1 : 0;
+    },
+
+    render(words) {
+      const list = $('clientResults');
+      list.replaceChildren();
+      if (!this.matches.length) {
+        list.appendChild(el('li', 'result result-meta', 'Sin coincidencias'));
+      }
+      this.matches.forEach((client, i) => {
+        const item = el('li', `result${i === this.activeIndex ? ' active' : ''}`);
+        item.setAttribute('role', 'option');
+        const name = el('div', 'result-name');
+        this.highlight(name, client.nombrePunto, words);
+        const meta = el('div', 'result-meta');
+        this.highlight(meta, `DNI ${client.dni} · Cód. ${client.codCliente} · ${client.distrito}`, words);
+        item.append(name, meta);
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          this.select(client);
+        });
+        list.appendChild(item);
+      });
+      list.classList.remove('hidden');
+    },
+
+    highlight(node, text, words) {
+      const plain = normalize(text);
+      const ranges = [];
+      words.forEach((w) => {
+        const i = plain.indexOf(w);
+        if (i >= 0) ranges.push([i, i + w.length]);
+      });
+      ranges.sort((a, b) => a[0] - b[0]);
+      let cursor = 0;
+      ranges.forEach(([start, end]) => {
+        if (start < cursor) return;
+        node.append(text.slice(cursor, start), el('mark', null, text.slice(start, end)));
+        cursor = end;
+      });
+      node.append(text.slice(cursor));
+    },
+
+    onKey(event) {
+      const list = $('clientResults');
+      if (list.classList.contains('hidden') || !this.matches.length) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        this.activeIndex = (this.activeIndex + step + this.matches.length) % this.matches.length;
+        [...list.children].forEach((li, i) => li.classList.toggle('active', i === this.activeIndex));
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        this.select(this.matches[Math.max(this.activeIndex, 0)]);
+      } else if (event.key === 'Escape') {
+        list.classList.add('hidden');
+      }
+    },
+
+    select(client) {
+      State.selected = client;
+      $('cNombre').textContent = client.nombrePunto;
+      $('cDireccion').textContent = client.direccion;
+      $('cDni').textContent = client.dni;
+      $('cCod').textContent = client.codCliente;
+      $('cZonal').textContent = client.zonal;
+      $('cRuta').textContent = client.ruta;
+      $('cModulo').textContent = client.modulo;
+      $('cDistrito').textContent = client.distrito;
+      $('clientPicker').classList.add('hidden');
+      $('clientCard').classList.remove('hidden');
+      $('clientResults').classList.add('hidden');
+      Ui.refreshSaveButton();
+    },
+
+    clear(focus = false) {
+      State.selected = null;
+      $('clientSearch').value = '';
+      $('clientCard').classList.add('hidden');
+      $('clientPicker').classList.remove('hidden');
+      $('clientResults').classList.add('hidden');
+      Ui.refreshSaveButton();
+      if (focus) $('clientSearch').focus();
+    },
+  };
+
+  const Recorder = {
+    recorder: null,
+    stream: null,
+    chunks: [],
+    interval: null,
+
+    init() {
+      $('btnRecord').addEventListener('click', () => this.toggle());
+      $('btnDiscard').addEventListener('click', () => this.reset());
+      $('audioFile').addEventListener('change', (e) => this.fromFile(e.target.files[0]));
+      if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) {
+        $('btnRecord').disabled = true;
+        this.status('Este navegador no permite grabar aquí. Usa "subir un audio".');
+      }
+    },
+
+    isRecording() {
+      return Boolean(this.recorder && this.recorder.state === 'recording');
+    },
+
+    mimeType() {
+      return ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+    },
+
+    async toggle() {
+      if (this.isRecording()) {
+        this.recorder.stop();
+        return;
+      }
+      this.reset();
+      if (!(await MicPermission.explain())) return;
+      this.status('Si el navegador lo pide, toca "Permitir" para usar el micrófono.');
+      try {
+        this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        const mimeType = this.mimeType();
+        this.recorder = new MediaRecorder(this.stream, mimeType ? { mimeType, audioBitsPerSecond: 32000 } : undefined);
+        this.chunks = [];
+        this.recorder.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
+        this.recorder.onstop = () => {
+          this.release();
+          this.setAudio(new Blob(this.chunks, { type: this.recorder.mimeType || 'audio/webm' }));
+        };
+        this.recorder.start(1000);
+        const startedAt = Date.now();
+        this.interval = setInterval(() => {
+          const seconds = Math.floor((Date.now() - startedAt) / 1000);
+          $('recTimer').textContent = Ui.time(seconds);
+          if (seconds >= MAX_RECORD_SECONDS) this.recorder.stop();
+        }, 250);
+        this.setRecording(true);
+        this.status('Grabando... toca para detener');
+      } catch (err) {
+        this.release();
+        this.status('Toca para grabar (máx. 5 min)');
+        if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+          $('micHelp').classList.remove('hidden');
+        } else {
+          this.error(`No se pudo acceder al micrófono (${err.name}). Usa "subir un audio".`);
+        }
+      }
+    },
+
+    fromFile(file) {
+      if (!file) return;
+      if (!file.type.startsWith('audio/')) return this.error('El archivo no es audio.');
+      this.reset();
+      this.setAudio(file);
+    },
+
+    setAudio(blob) {
+      this.setRecording(false);
+      if (blob.size > MAX_AUDIO_BYTES) return this.error('El audio supera 25 MB.');
+      State.audio = blob;
+      const preview = $('audioPreview');
+      preview.src = URL.createObjectURL(blob);
+      preview.classList.remove('hidden');
+      $('btnDiscard').classList.remove('hidden');
+      this.status('Audio listo. Escúchalo o vuelve a grabar.');
+    },
+
+    reset() {
+      if (this.isRecording()) {
+        this.recorder.onstop = null;
+        this.recorder.stop();
+      }
+      this.release();
+      State.audio = null;
+      const preview = $('audioPreview');
+      if (preview.src) URL.revokeObjectURL(preview.src);
+      preview.removeAttribute('src');
+      preview.classList.add('hidden');
+      $('btnDiscard').classList.add('hidden');
+      $('audioFile').value = '';
+      $('recError').classList.add('hidden');
+      $('micHelp').classList.add('hidden');
+      $('recTimer').textContent = '00:00';
+      this.setRecording(false);
+      this.status('Toca para grabar (máx. 5 min)');
+    },
+
+    release() {
+      clearInterval(this.interval);
+      if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
+    },
+
+    setRecording(recording) {
+      $('recorder').classList.toggle('recording', recording);
+      Ui.refreshSaveButton();
+    },
+
+    status(message) {
+      $('recStatus').textContent = message;
+    },
+
+    error(message) {
+      $('recError').textContent = message;
+      $('recError').classList.remove('hidden');
+    },
+
+    async payload() {
+      if (!State.audio) return null;
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(State.audio);
+      });
+      return { mimeType: State.audio.type, base64: String(dataUrl).split(',')[1] };
+    },
+  };
+
+  const VisitForm = {
+    init() {
+      $('fecha').value = Ui.today();
+      $('visitForm').addEventListener('submit', (e) => this.submit(e));
+    },
+
+    async submit(event) {
+      event.preventDefault();
+      if (!State.selected) return Ui.notify('Selecciona un cliente.', false);
+      if (!$('fecha').value) return Ui.notify('Indica la fecha.', false);
+      if (!State.audio && !confirm('No grabaste audio. ¿Guardar la visita sin nota de voz?')) return;
+
+      Ui.loading(true);
+      try {
+        const payload = {
+          form: { dni: State.selected.dni, codCliente: State.selected.codCliente, fecha: $('fecha').value },
+          audio: await Recorder.payload(),
+        };
+        Records.render(await api('apiCreateRecord', Session.dni, payload));
+        ClientPicker.clear();
+        Recorder.reset();
+        $('fecha').value = Ui.today();
+        Ui.notify(payload.audio ? 'Visita guardada. El audio se transcribirá en unos minutos.' : 'Visita guardada.');
+      } catch (err) {
+        Ui.notify(err.message || String(err), false);
+      } finally {
+        Ui.loading(false);
+      }
+    },
+  };
+
+  const Records = {
+    init() {
+      $('btnRefresh').addEventListener('click', () => this.load());
+      $('recordSearch').addEventListener('input', () => this.draw());
+      const filters = $('statusFilters');
+      ['', ...STATUSES].forEach((status) => {
+        const btn = el('button', `filter${status === '' ? ' active' : ''}`, status ? status.replace('_', ' ') : 'Todos');
+        btn.type = 'button';
+        btn.addEventListener('click', () => {
+          State.statusFilter = status;
+          [...filters.children].forEach((b) => b.classList.toggle('active', b === btn));
+          this.draw();
+        });
+        filters.appendChild(btn);
+      });
+    },
+
+    async load(silent = false) {
+      if (!silent) Ui.loading(true);
+      try {
+        this.render(await api('apiListRecords', Session.dni));
+      } catch (err) {
+        if (!silent) Ui.notify(err.message || String(err), false);
+      } finally {
+        if (!silent) Ui.loading(false);
+      }
+    },
+
+    render(records) {
+      State.records = records || [];
+      const waiting = State.records.filter((r) => r.estado === 'PENDIENTE' || r.estado === 'EN_PROCESO').length;
+      $('pendingBadge').textContent = waiting;
+      $('pendingBadge').classList.toggle('hidden', !waiting);
+      clearTimeout(State.refreshTimer);
+      if (waiting) State.refreshTimer = setTimeout(() => this.load(true), AUTO_REFRESH_MS);
+      this.draw();
+    },
+
+    draw() {
+      const term = normalize($('recordSearch').value.trim());
+      const rows = State.records.filter(
+        (r) =>
+          (!State.statusFilter || r.estado === State.statusFilter) &&
+          (!term || normalize(`${r.nombrePunto} ${r.dni} ${r.codCliente} ${r.transcripcion}`).includes(term))
+      );
+      $('emptyState').classList.toggle('hidden', rows.length > 0);
+      $('recordsList').replaceChildren(...rows.map((r) => this.card(r)));
+    },
+
+    card(record) {
+      const card = el('article', 'record');
+      const top = el('div', 'record-top');
+      const info = el('div');
+      info.append(
+        el('div', 'record-name', record.nombrePunto),
+        el('div', 'record-meta', `DNI ${record.dni} · Cód. ${record.codCliente} · ${record.fecha}`),
+        el('div', 'record-meta', [record.zonal, record.ruta, record.modulo, record.distrito].filter(Boolean).join(' · '))
+      );
+      const badge = el('span', `badge st-${record.estado}`, record.estado.replace('_', ' '));
+      if (record.error) badge.title = record.error;
+      top.append(info, badge);
+      card.appendChild(top);
+
+      if (record.transcripcion) card.appendChild(el('div', 'record-text', record.transcripcion));
+
+      const actions = el('div', 'record-actions');
+      if (record.audioUrl) {
+        const link = el('a', 'link', 'Escuchar audio');
+        link.href = record.audioUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        actions.appendChild(link);
+      }
+      const del = el('button', 'link danger', 'Eliminar');
+      del.type = 'button';
+      del.addEventListener('click', () => this.remove(record));
+      actions.appendChild(del);
+      card.appendChild(actions);
+      return card;
+    },
+
+    async remove(record) {
+      if (!confirm(`¿Eliminar la visita de ${record.nombrePunto}?`)) return;
+      Ui.loading(true);
+      try {
+        this.render(await api('apiDeleteRecord', Session.dni, record.id));
+      } catch (err) {
+        Ui.notify(err.message || String(err), false);
+      } finally {
+        Ui.loading(false);
+      }
+    },
+  };
+
+  const Session = {
+    STORAGE_KEY: 'jsm_dni_jefe',
+    dni: '',
+
+    init() {
+      $('loginForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.login($('dniJefe').value);
+      });
+      $('btnLogout').addEventListener('click', () => this.logout());
+      const saved = this.read();
+      if (saved) this.login(saved, true);
+    },
+
+    async login(rawDni, silent = false) {
+      const dni = String(rawDni || '').replace(/\D/g, '');
+      if (!dni) return this.fail('Ingresa el DNI del jefe zonal.');
+
+      Ui.loading(true);
+      try {
+        const profile = await api('apiLogin', dni);
+        this.dni = profile.dniJefe;
+        this.write(this.dni);
+        $('brandSub').textContent = `Jefe: ${profile.nombreJefe}`;
+        $('btnLogout').classList.remove('hidden');
+        $('appTabs').classList.remove('hidden');
+        $('loginError').classList.add('hidden');
+        Ui.showView('viewNew');
+        const [, records] = await Promise.all([ClientPicker.load(), api('apiListRecords', this.dni)]);
+        Records.render(records);
+      } catch (err) {
+        this.write('');
+        if (!silent) this.fail(err.message || String(err));
+      } finally {
+        Ui.loading(false);
+      }
+    },
+
+    logout() {
+      this.write('');
+      window.location.reload();
+    },
+
+    fail(message) {
+      $('loginError').textContent = message;
+      $('loginError').classList.remove('hidden');
+    },
+
+    read() {
+      try {
+        return localStorage.getItem(this.STORAGE_KEY) || '';
+      } catch (err) {
+        return '';
+      }
+    },
+
+    write(value) {
+      try {
+        if (value) localStorage.setItem(this.STORAGE_KEY, value);
+        else localStorage.removeItem(this.STORAGE_KEY);
+      } catch (err) {
+        return;
+      }
+    },
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    Environment.init();
+    document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => Ui.showView(tab.dataset.view)));
+    ClientPicker.init();
+    Recorder.init();
+    VisitForm.init();
+    Records.init();
+    Session.init();
+  });
+</script>
