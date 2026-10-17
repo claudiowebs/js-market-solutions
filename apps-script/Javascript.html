@@ -1,10 +1,9 @@
 <script>
   const MAX_RECORD_SECONDS = 300;
   const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
-  const AUTO_REFRESH_MS = 60000;
   const MAX_RESULTS = 8;
   const CLIENT_KEYS = ['dni', 'codCliente', 'codigoCum', 'nombrePunto', 'zonal', 'ruta', 'modulo', 'distrito', 'direccion'];
-  const STATUSES = ['PENDIENTE', 'EN_PROCESO', 'TRANSCRITO', 'ERROR', 'SIN_AUDIO'];
+  const STATUSES = ['CON_AUDIO', 'SOLO_TEXTO', 'SIN_DATOS'];
 
   const $ = (id) => document.getElementById(id);
   const el = (tag, className, text) => {
@@ -99,7 +98,6 @@
     audio: null,
     records: [],
     statusFilter: '',
-    refreshTimer: null,
   };
 
   const Ui = {
@@ -415,7 +413,7 @@
         Recorder.reset();
         $('observacion').value = '';
         $('fecha').value = Ui.today();
-        Ui.notify(payload.audio ? 'Visita guardada. El audio se transcribirá en unos minutos.' : 'Visita guardada.');
+        Ui.notify('Visita guardada.');
       } catch (err) {
         Ui.notify(err.message || String(err), false);
       } finally {
@@ -454,11 +452,8 @@
 
     render(records) {
       State.records = records || [];
-      const waiting = State.records.filter((r) => r.estado === 'PENDIENTE' || r.estado === 'EN_PROCESO').length;
-      $('pendingBadge').textContent = waiting;
-      $('pendingBadge').classList.toggle('hidden', !waiting);
-      clearTimeout(State.refreshTimer);
-      if (waiting) State.refreshTimer = setTimeout(() => this.load(true), AUTO_REFRESH_MS);
+      $('pendingBadge').textContent = State.records.length;
+      $('pendingBadge').classList.toggle('hidden', !State.records.length);
       this.draw();
     },
 
@@ -467,7 +462,7 @@
       const rows = State.records.filter(
         (r) =>
           (!State.statusFilter || r.estado === State.statusFilter) &&
-          (!term || normalize(`${r.nombrePunto} ${r.dni} ${r.codCliente} ${r.transcripcion} ${r.observacion}`).includes(term))
+          (!term || normalize(`${r.nombrePunto} ${r.dni} ${r.codCliente} ${r.observacion}`).includes(term))
       );
       $('emptyState').classList.toggle('hidden', rows.length > 0);
       $('recordsList').replaceChildren(...rows.map((r) => this.card(r)));
@@ -488,7 +483,6 @@
       card.appendChild(top);
 
       if (record.observacion) card.appendChild(el('div', 'record-obs', record.observacion));
-      if (record.transcripcion) card.appendChild(el('div', 'record-text', record.transcripcion));
 
       const actions = el('div', 'record-actions');
       if (record.audioUrl) {
