@@ -50,6 +50,7 @@ const API_ROUTES = Object.freeze({
   apiListRecords: (dniJefe) => apiListRecords(dniJefe),
   apiCreateRecord: (dniJefe, payload) => apiCreateRecord(dniJefe, payload),
   apiDeleteRecord: (dniJefe, id) => apiDeleteRecord(dniJefe, id),
+  apiTranscribeAudio: (dniJefe, audio) => apiTranscribeAudio(dniJefe, audio),
 });
 
 function doGet() {
@@ -142,11 +143,13 @@ function apiCreateRecord(dniJefe, payload) {
   if (!client) throw new Error('El cliente no pertenece a tu zonal.');
 
   const id = Utilities.getUuid();
+  const now = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+  const transcripcion = Transcript.sanitize(payload.transcripcion);
   const audio = payload.audio ? AudioStorage.save(payload.audio, id) : null;
 
   RecordRepository.insert({
     id,
-    fechaRegistro: Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd HH:mm:ss'),
+    fechaRegistro: now,
     fecha: input.fecha,
     dni: client.dni,
     codCliente: client.codCliente,
@@ -158,8 +161,8 @@ function apiCreateRecord(dniJefe, payload) {
     audioFileId: audio ? audio.id : '',
     audioUrl: audio ? audio.url : '',
     estado: audio ? CONFIG.STATUS.AUDIO : input.observacion ? CONFIG.STATUS.TEXT : CONFIG.STATUS.EMPTY,
-    transcripcion: '',
-    fechaTranscripcion: '',
+    transcripcion,
+    fechaTranscripcion: transcripcion ? now : '',
     error: '',
     dniJefe: jefe.dniJefe,
     nombreJefe: jefe.nombreJefe,
