@@ -35,7 +35,7 @@ const CONFIG = Object.freeze({
     LOCK_SECONDS: 900,
     FAIL_DELAY_MS: 1200,
   },
-  STATUS: { PENDING: 'PENDIENTE', NO_AUDIO: 'SIN_AUDIO' },
+  STATUS: { AUDIO: 'CON_AUDIO', TEXT: 'SOLO_TEXTO', EMPTY: 'SIN_DATOS' },
   PROPS: {
     SPREADSHEET_ID: 'SPREADSHEET_ID',
     AUDIO_FOLDER_ID: 'AUDIO_FOLDER_ID',
@@ -100,7 +100,7 @@ function setup() {
   sheet.setFrozenRows(1);
 
   const total = syncClientes();
-  installDailySync_();
+  installSyncTrigger_();
 
   Logger.log('Spreadsheet: %s', Db.spreadsheet().getUrl());
   Logger.log('Carpeta audios: %s', DriveApp.getFolderById(props.getProperty(CONFIG.PROPS.AUDIO_FOLDER_ID)).getUrl());
@@ -157,7 +157,7 @@ function apiCreateRecord(dniJefe, payload) {
     distrito: client.distrito,
     audioFileId: audio ? audio.id : '',
     audioUrl: audio ? audio.url : '',
-    estado: audio ? CONFIG.STATUS.PENDING : CONFIG.STATUS.NO_AUDIO,
+    estado: audio ? CONFIG.STATUS.AUDIO : input.observacion ? CONFIG.STATUS.TEXT : CONFIG.STATUS.EMPTY,
     transcripcion: '',
     fechaTranscripcion: '',
     error: '',
@@ -356,11 +356,11 @@ const AudioStorage = {
   },
 };
 
-function installDailySync_() {
+function installSyncTrigger_() {
   ScriptApp.getProjectTriggers()
     .filter((t) => t.getHandlerFunction() === 'syncClientes')
     .forEach((t) => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('syncClientes').timeBased().everyDays(1).atHour(6).inTimezone(CONFIG.TIMEZONE).create();
+  ScriptApp.newTrigger('syncClientes').timeBased().everyHours(1).create();
 }
 
 function jsonResponse_(body) {
