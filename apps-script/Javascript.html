@@ -96,6 +96,8 @@
     clients: [],
     selected: null,
     audio: null,
+    transcripcion: '',
+    transcribing: false,
     records: [],
     statusFilter: '',
   };
@@ -123,7 +125,7 @@
       if (id === 'viewList') Records.load();
     },
     refreshSaveButton() {
-      $('btnSave').disabled = !State.selected || Recorder.isRecording();
+      $('btnSave').disabled = !State.selected || Recorder.isRecording() || State.transcribing;
     },
   };
 
@@ -335,6 +337,7 @@
       preview.classList.remove('hidden');
       $('btnDiscard').classList.remove('hidden');
       this.status('Audio listo. Escúchalo o vuelve a grabar.');
+      Transcriber.run();
     },
 
     reset() {
@@ -344,6 +347,7 @@
       }
       this.release();
       State.audio = null;
+      Transcriber.cancel();
       const preview = $('audioPreview');
       if (preview.src) URL.revokeObjectURL(preview.src);
       preview.removeAttribute('src');
@@ -389,6 +393,47 @@
     },
   };
 
+  const Transcriber = {
+    ticket: 0,
+
+    async run() {
+      const ticket = ++this.ticket;
+      State.transcripcion = '';
+      this.setBusy(true);
+      Recorder.status('Transcribiendo audio...');
+      try {
+        const { text } = await api('apiTranscribeAudio', Session.dni, await Recorder.payload());
+        if (ticket !== this.ticket) return;
+        State.transcripcion = text;
+        this.fill(text);
+        Recorder.status('Audio transcrito. Revisa la observación antes de guardar.');
+      } catch (err) {
+        if (ticket !== this.ticket) return;
+        Recorder.status('Audio listo. Escúchalo o vuelve a grabar.');
+        Recorder.error((err && err.message) || 'Servicio de transcripción agotado o no disponible. Guarda solo el audio o completa la observación con texto.');
+      } finally {
+        if (ticket === this.ticket) this.setBusy(false);
+      }
+    },
+
+    cancel() {
+      this.ticket++;
+      State.transcripcion = '';
+      this.setBusy(false);
+    },
+
+    fill(text) {
+      const field = $('observacion');
+      const current = field.value.trim();
+      field.value = (current ? `${current}\n${text}` : text).slice(0, field.maxLength);
+    },
+
+    setBusy(busy) {
+      State.transcribing = busy;
+      Ui.refreshSaveButton();
+    },
+  };
+
   const VisitForm = {
     init() {
       $('fecha').value = Ui.today();
@@ -407,6 +452,7 @@
         const payload = {
           form: { dni: State.selected.dni, codCliente: State.selected.codCliente, fecha: $('fecha').value, observacion },
           audio: await Recorder.payload(),
+          transcripcion: State.transcripcion,
         };
         Records.render(await api('apiCreateRecord', Session.dni, payload));
         ClientPicker.clear();
