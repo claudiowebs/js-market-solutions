@@ -6,7 +6,12 @@ const TRANSCRIPTION = Object.freeze({
   MAX_STORED_CHARS: 10000,
   RETRYABLE_CODES: [500, 502, 503, 504],
   RETRY_DELAY_MS: 1500,
-  UNAVAILABLE_MESSAGE: 'Servicio de transcripción agotado o no disponible. Guarda solo el audio o completa la observación con texto.',
+  UNAVAILABLE_MESSAGE: 'Transcripción automática no disponible. Tu audio se guardará igual; completa la observación si lo necesitas.',
+  EXHAUSTED_MESSAGE: 'Transcripción automática agotada. Tu audio se guardará igual; completa la observación si lo necesitas.',
+  EXHAUSTED_CODES: [429],
+  EXHAUSTED_PATTERN: /quota|exhausted|too many times|rate limit/i,
+  BREAKER_KEY: 'TRANSCRIPTION_EXHAUSTED',
+  BREAKER_SECONDS: 30 * 60,
   MIME_ALIASES: { 'audio/x-m4a': 'audio/mp4', 'audio/x-wav': 'audio/wav' },
   PROMPT: [
     'Transcribe literalmente este audio en español de Perú.',
@@ -19,12 +24,48 @@ const TRANSCRIPTION = Object.freeze({
 
 function apiTranscribeAudio(dniJefe, audio) {
   Access.authenticate(dniJefe);
+  if (TranscriptionBreaker.isOpen()) return TranscriptionResult.unavailable(true);
   try {
-    return { text: Gemini.transcribe(audio) };
+    return TranscriptionResult.ok(Gemini.transcribe(audio));
   } catch (err) {
     console.error(`Transcripción fallida: ${err.message}`);
-    throw new Error(TRANSCRIPTION.UNAVAILABLE_MESSAGE);
+    const exhausted = TranscriptionBreaker.isExhaustion(err);
+    if (exhausted) TranscriptionBreaker.open();
+    return TranscriptionResult.unavailable(exhausted);
   }
+}
+
+const TranscriptionResult = {
+  ok(text) {
+    return { available: true, exhausted: false, text, message: '' };
+  },
+  unavailable(exhausted) {
+    return {
+      available: false,
+      exhausted,
+      text: '',
+      message: exhausted ? TRANSCRIPTION.EXHAUSTED_MESSAGE : TRANSCRIPTION.UNAVAILABLE_MESSAGE,
+    };
+  },
+};
+
+const TranscriptionBreaker = {
+  isOpen() {
+    return CacheService.getScriptCache().get(TRANSCRIPTION.BREAKER_KEY) === '1';
+  },
+  open() {
+    CacheService.getScriptCache().put(TRANSCRIPTION.BREAKER_KEY, '1', TRANSCRIPTION.BREAKER_SECONDS);
+  },
+  reset() {
+    CacheService.getScriptCache().remove(TRANSCRIPTION.BREAKER_KEY);
+  },
+  isExhaustion(err) {
+    return TRANSCRIPTION.EXHAUSTED_CODES.includes(err.httpCode) || TRANSCRIPTION.EXHAUSTED_PATTERN.test(err.message);
+  },
+};
+
+function resetTranscriptionBreaker() {
+  TranscriptionBreaker.reset();
 }
 
 const Transcript = {
@@ -83,7 +124,11 @@ const Gemini = {
       res = UrlFetchApp.fetch(url, options);
     }
     const code = res.getResponseCode();
-    if (code !== 200) throw new Error(`Gemini HTTP ${code}: ${this.errorMessage_(res)}`);
+    if (code !== 200) {
+      const error = new Error(`Gemini HTTP ${code}: ${this.errorMessage_(res)}`);
+      error.httpCode = code;
+      throw error;
+    }
     return JSON.parse(res.getContentText());
   },
 
