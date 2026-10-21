@@ -36,6 +36,7 @@ const CONFIG = Object.freeze({
     FAIL_DELAY_MS: 1200,
   },
   STATUS: { AUDIO: 'CON_AUDIO', TEXT: 'SOLO_TEXTO', EMPTY: 'SIN_DATOS' },
+  PENDING_TRANSCRIPTION: 'SIN_TRANSCRIPCION',
   PROPS: {
     SPREADSHEET_ID: 'SPREADSHEET_ID',
     AUDIO_FOLDER_ID: 'AUDIO_FOLDER_ID',
@@ -163,7 +164,7 @@ function apiCreateRecord(dniJefe, payload) {
     estado: audio ? CONFIG.STATUS.AUDIO : input.observacion ? CONFIG.STATUS.TEXT : CONFIG.STATUS.EMPTY,
     transcripcion,
     fechaTranscripcion: transcripcion ? now : '',
-    error: '',
+    error: audio && !transcripcion ? CONFIG.PENDING_TRANSCRIPTION : '',
     dniJefe: jefe.dniJefe,
     nombreJefe: jefe.nombreJefe,
     observacion: input.observacion,
